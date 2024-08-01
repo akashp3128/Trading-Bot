@@ -1,6 +1,8 @@
 from src.backtesting.backtester import Backtester
 from src.strategy.simple_moving_average import SMACrossoverStrategy
+from src.utils.database import Database
 import matplotlib.pyplot as plt
+import pandas as pd
 from datetime import datetime, timedelta
 
 def main():
@@ -25,6 +27,17 @@ def main():
         print(f"Total Return: {metrics['total_return']:.2%}")
         print(f"Sharpe Ratio: {metrics['sharpe_ratio']:.2f}")
         print(f"Max Drawdown: {metrics['max_drawdown']:.2%}")
+
+        # Retrieve stored results from MongoDB
+        db = Database()
+        stored_results = db.get_backtest_results(strategy.__class__.__name__)
+        if stored_results and 'results' in stored_results:
+            print("\nRetrieved stored backtest results:")
+            stored_df = pd.DataFrame(stored_results['results'])
+            print(stored_df.head())
+        else:
+            print("\nNo stored backtest results found.")
+        db.close()
 
         if not results.empty:
             # Visualize results

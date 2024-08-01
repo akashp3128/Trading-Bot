@@ -13,8 +13,9 @@ class SMACrossoverStrategy:
         signals['short_mavg'] = data['close'].rolling(window=self.short_window, min_periods=1, center=False).mean()
         signals['long_mavg'] = data['close'].rolling(window=self.long_window, min_periods=1, center=False).mean()
 
-        signals['signal'][self.short_window:] = np.where(signals['short_mavg'][self.short_window:] 
-                                                         > signals['long_mavg'][self.short_window:], 1.0, 0.0)   
+        # Use boolean indexing instead of .loc or .iloc
+        signals['signal'] = 0.0
+        signals['signal'] = np.where(signals['short_mavg'] > signals['long_mavg'], 1.0, 0.0)
         signals['positions'] = signals['signal'].diff()
 
         return signals['positions'].iloc[-1]

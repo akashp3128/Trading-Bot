@@ -1,54 +1,38 @@
 import pandas as pd
 import requests
-from datetime import datetime, timedelta
+from datetime import datetime
+from ..utils.database import Database
 
 def get_historical_data(symbol, start_date, end_date):
     print(f"Fetching data for {symbol} from {start_date} to {end_date}")
-    url = f"https://api.pro.coinbase.com/products/{symbol}/candles"
     
-    start = datetime.strptime(start_date, "%Y-%m-%d")
-    end = datetime.strptime(end_date, "%Y-%m-%d")
+    db = Database()
+    data = db.get_historical_data(symbol, start_date, end_date)
     
-    all_data = []
-    current_start = start
-    
-    while current_start < end:
-        current_end = min(current_start + timedelta(days=200), end)
-        
+    if data.empty:
+        # If data is not in MongoDB, fetch it from the API
+        url = f"https://api.pro.coinbase.com/products/{symbol}/candles"
         params = {
-            'start': current_start.isoformat(),
-            'end': current_end.isoformat(),
+            'start': start_date,
+            'end': end_date,
             'granularity': 86400  # daily candles
         }
-        
         response = requests.get(url, params=params)
-        print(f"API Response status code for {current_start.date()} to {current_end.date()}: {response.status_code}")
-        
         if response.status_code != 200:
             print(f"Error response from API: {response.text}")
             return pd.DataFrame()
         
         data = response.json()
+        df = pd.DataFrame(data, columns=['timestamp', 'low', 'high', 'open', 'close', 'volume'])
+        df['timestamp'] = pd.to_datetime(df['timestamp'], unit='s')
+        df.set_index('timestamp', inplace=True)
+        df.sort_index(inplace=True)
         
-        if not isinstance(data, list):
-            print(f"Unexpected data format. Received: {data}")
-            return pd.DataFrame()
-        
-        all_data.extend(data)
-        current_start = current_end + timedelta(days=1)
+        # Store the fetched data in MongoDB
+        db.insert_historical_data(symbol, df)
+    else:
+        df = data
+        df.set_index('timestamp', inplace=True)
     
-    print(f"Received {len(all_data)} total data points")
-    
-    if not all_data:
-        print("No data received from API")
-        return pd.DataFrame()
-
-    df = pd.DataFrame(all_data, columns=['timestamp', 'low', 'high', 'open', 'close', 'volume'])
-    df['timestamp'] = pd.to_datetime(df['timestamp'], unit='s')
-    df.set_index('timestamp', inplace=True)
-    df.sort_index(inplace=True)
-    
-    print(f"Processed DataFrame shape: {df.shape}")
-    print(f"Processed DataFrame head:\n{df.head()}")
-    
+    db.close()
     return df

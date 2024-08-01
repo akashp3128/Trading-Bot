@@ -1,6 +1,7 @@
 import pandas as pd
 import numpy as np
 from ..data_collection.exchange_data import get_historical_data
+from ..utils.database import Database
 
 class Backtester:
     def __init__(self, strategy, start_date, end_date, initial_capital):
@@ -22,12 +23,14 @@ class Backtester:
 
         results = []
 
-        for date, row in data.iterrows():
-            if len(data.loc[:date]) >= self.strategy.long_window:
-                signal = self.strategy.generate_signal(data.loc[:date])
+        for i in range(len(data)):
+            current_data = data.iloc[:i+1]
+            if len(current_data) >= self.strategy.long_window:
+                signal = self.strategy.generate_signal(current_data)
             else:
                 signal = 0
 
+            row = data.iloc[i]
             if signal == 1 and self.current_capital > 0:  # Buy signal
                 buy_amount = self.current_capital
                 quantity = buy_amount / row['close']
@@ -43,7 +46,7 @@ class Backtester:
                 portfolio_value += self.positions['BTC'] * row['close']
 
             results.append({
-                'date': date,
+                'date': row.name,
                 'portfolio_value': portfolio_value,
                 'btc_price': row['close']
             })
@@ -51,6 +54,11 @@ class Backtester:
         results_df = pd.DataFrame(results)
         print(f"Results DataFrame shape: {results_df.shape}")
         print(f"Results DataFrame head:\n{results_df.head()}")
+        
+        # Store backtest results in MongoDB
+        db = Database()
+        db.insert_backtest_results(self.strategy.__class__.__name__, results_df)
+        db.close()
         
         return results_df
 
