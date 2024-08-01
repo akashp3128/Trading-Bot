@@ -1,28 +1,15 @@
-# Crypto Trading Bot
+# Cryptocurrency Trading Bot
 
-This project is a cryptocurrency trading bot that fetches OHLCV (Open, High, Low, Close, Volume) data from Coinbase, processes it, and applies a simple moving average (SMA) crossover strategy to generate trading signals.
+This project implements a simple cryptocurrency trading bot with backtesting capabilities. It fetches historical price data from the Coinbase Pro API, applies a Simple Moving Average (SMA) crossover strategy, and simulates trading performance.
 
-## Current Features
+## Features
 
-- Fetch real-time OHLCV data from Coinbase for BTC/USD
-- Store and retrieve data using a local JSON file
-- Process OHLCV data and calculate moving averages
-- Generate trading signals based on SMA crossover strategy
+- Fetch historical OHLCV data from Coinbase Pro API
+- Implement a Simple Moving Average (SMA) crossover strategy
+- Backtest trading strategies using historical data
+- Calculate performance metrics (Total Return, Sharpe Ratio, Max Drawdown)
+- Visualize backtesting results
 
-## Project Structure
-crypto_trading_bot/
-├── src/
-│   ├── data_collection/
-│   │   └── exchange_data.py
-│   ├── data_processing/
-│   │   └── processor.py
-│   ├── strategy/
-│   │   └── simple_moving_average.py
-│   └── utils/
-│       └── database.py
-├── main.py
-├── requirements.txt
-└── README.md
 
 ## Setup and Installation
 
@@ -37,18 +24,26 @@ pip install -r requirements.txt
 
 ## Usage
 
-Run the main script:
+Run the main script to perform backtesting:
+
 python main.py
 
-This will fetch the latest BTC/USD data from Coinbase, process it, and print the results including the generated trading signals.
+This will execute the SMA crossover strategy on BTC/USD data for the last 6 months and display the results.
+
+## Customisation
+
+- Modify the `SMACrossoverStrategy` class in `src/strategy/simple_moving_average.py` to implement different trading strategies.
+- Adjust the backtesting parameters (date range, initial capital) in `main.py`.
+- Extend the `Backtester` class in `src/backtesting/backtester.py` to add more sophisticated backtesting features.
 
 ## Future Improvements
+- Add more trading strategies (e.g., Bollinger Bands, MACD)
+- Implement real-time trading with live data
+- Add more performance metrics and visualizations
+- Integrate with a cryptocurrency exchange API for live trading
+- Add more advanced backtesting features (e.g., slippage, transaction costs)
+- Implement a more robust and user-friendly command-line interface
 
-- Implement backtesting functionality
-- Add more sophisticated trading strategies
-- Create a simulated trading environment
-- Implement real-time data streaming and trading
-- Add data visualization
 
 ## Contributing
 
