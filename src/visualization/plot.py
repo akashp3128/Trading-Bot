@@ -1,12 +1,7 @@
-from src.backtesting.backtester import Backtester
-from src.strategy.simple_moving_average import SMACrossoverStrategy
-from src.utils.database import Database
-import pandas as pd
-import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
+import numpy as np
 from prettytable import PrettyTable
-from datetime import datetime, timedelta
 
 def plot_results(results, asset):
     # Portfolio Value vs Asset Price
@@ -68,56 +63,3 @@ def create_trade_log(results, asset):
     trades['trade_type'] = np.where(trades['portfolio_value'].diff() > 0, 'Buy', 'Sell')
     trades['trade_return'] = trades['portfolio_value'].pct_change()
     return trades[['date', 'trade_type', f'{asset}_price', 'portfolio_value', 'trade_return']]
-
-def main():
-    try:
-        strategy = SMACrossoverStrategy(short_window=10, long_window=30)
-        
-        # Use a 6-month date range
-        end_date = datetime.now().strftime("%Y-%m-%d")
-        start_date = (datetime.now() - timedelta(days=180)).strftime("%Y-%m-%d")
-        
-        # Choose your cryptocurrency here
-        symbol = "SOL-USD"  # or "BTC-USD", "ETH-USD", etc.
-        
-        backtester = Backtester(strategy, start_date=start_date, end_date=end_date, initial_capital=10000, symbol=symbol)
-        
-        results = backtester.run()
-        print("Results shape:", results.shape)
-        print("Results columns:", results.columns)
-        print("First few rows of results:")
-        print(results.head())
-
-        metrics = backtester.calculate_metrics(results)
-
-        print("\nBacktesting Results:")
-        print_performance_summary(metrics)
-
-        # Retrieve stored results from MongoDB
-        db = Database()
-        stored_results = db.get_backtest_results(f"{strategy.__class__.__name__}_{symbol}")
-        if stored_results and 'results' in stored_results:
-            print("\nRetrieved stored backtest results:")
-            stored_df = pd.DataFrame(stored_results['results'])
-            print(stored_df.head())
-        else:
-            print("\nNo stored backtest results found.")
-        db.close()
-
-        if not results.empty:
-            asset = symbol.split('-')[0].lower()
-            plot_results(results, asset)
-            
-            trade_log = create_trade_log(results, asset)
-            print("\nTrade Log:")
-            print(trade_log)
-        else:
-            print("No data to visualize.")
-
-    except Exception as e:
-        print(f"An error occurred: {str(e)}")
-        import traceback
-        traceback.print_exc()
-
-if __name__ == "__main__":
-    main()

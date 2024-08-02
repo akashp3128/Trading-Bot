@@ -29,3 +29,6 @@ yarl==1.9.4
 pandas
 requests
 matplotlib
+pymongo
+seaborn
+prettytable
