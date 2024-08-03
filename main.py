@@ -1,5 +1,5 @@
 from src.backtesting.backtester import Backtester
-from src.strategy.simple_moving_average import SMACrossoverStrategy
+from src.strategy.rsi_strategy import RSIStrategy
 from src.utils.database import Database
 import pandas as pd
 import numpy as np
@@ -9,17 +9,15 @@ from prettytable import PrettyTable
 from datetime import datetime, timedelta
 
 def plot_results(results, asset):
-    # Portfolio Value vs Asset Price
     plt.figure(figsize=(12, 6))
     plt.plot(results['date'], results['portfolio_value'], label='Portfolio Value')
-    plt.plot(results['date'], results[f'{asset}_price'] * (10000 / results[f'{asset}_price'].iloc[0]), label=f'{asset.upper()} Price (Normalized)')
+    plt.plot(results['date'], results[f'{asset.lower()}_price'] * (results['portfolio_value'].iloc[0] / results[f'{asset.lower()}_price'].iloc[0]), label=f'{asset.upper()} Price (Normalized)')
     plt.legend()
     plt.title(f'Backtesting Results: Portfolio Value vs {asset.upper()} Price')
     plt.xlabel('Date')
     plt.ylabel('Value')
     plt.show()
 
-    # Drawdown plot
     plt.figure(figsize=(12, 6))
     drawdown = (results['portfolio_value'] / results['portfolio_value'].cummax() - 1)
     plt.plot(results['date'], drawdown)
@@ -29,7 +27,6 @@ def plot_results(results, asset):
     plt.ylabel('Drawdown')
     plt.show()
 
-    # Daily returns distribution
     plt.figure(figsize=(12, 6))
     daily_returns = results['portfolio_value'].pct_change()
     sns.histplot(daily_returns, kde=True)
@@ -38,7 +35,6 @@ def plot_results(results, asset):
     plt.ylabel('Frequency')
     plt.show()
 
-    # Cumulative returns
     plt.figure(figsize=(12, 6))
     cumulative_returns = (1 + daily_returns).cumprod()
     plt.plot(results['date'], cumulative_returns)
@@ -47,7 +43,6 @@ def plot_results(results, asset):
     plt.ylabel('Cumulative Return')
     plt.show()
 
-    # Rolling Sharpe ratio
     plt.figure(figsize=(12, 6))
     rolling_sharpe = daily_returns.rolling(window=30).mean() / daily_returns.rolling(window=30).std() * np.sqrt(252)
     plt.plot(results['date'][30:], rolling_sharpe[30:])
@@ -67,20 +62,18 @@ def create_trade_log(results, asset):
     trades = results[results['portfolio_value'].diff() != 0].copy()
     trades['trade_type'] = np.where(trades['portfolio_value'].diff() > 0, 'Buy', 'Sell')
     trades['trade_return'] = trades['portfolio_value'].pct_change()
-    return trades[['date', 'trade_type', f'{asset}_price', 'portfolio_value', 'trade_return']]
+    return trades[['date', 'trade_type', f'{asset.lower()}_price', 'portfolio_value', 'trade_return']]
 
 def main():
     try:
-        strategy = SMACrossoverStrategy(short_window=10, long_window=30)
+        strategy = RSIStrategy(rsi_period=14, overbought=65, oversold=35)
         
-        # Use a 6-month date range
         end_date = datetime.now().strftime("%Y-%m-%d")
         start_date = (datetime.now() - timedelta(days=180)).strftime("%Y-%m-%d")
         
-        # Choose your cryptocurrency here
-        symbol = "SOL-USD"  # or "BTC-USD", "ETH-USD", etc.
+        symbol = "SOL-USD"
         
-        backtester = Backtester(strategy, start_date=start_date, end_date=end_date, initial_capital=10000, symbol=symbol)
+        backtester = Backtester(strategy, start_date=start_date, end_date=end_date, initial_capital=10000, symbol=symbol, initial_position=0)
         
         results = backtester.run()
         print("Results shape:", results.shape)
@@ -93,7 +86,6 @@ def main():
         print("\nBacktesting Results:")
         print_performance_summary(metrics)
 
-        # Retrieve stored results from MongoDB
         db = Database()
         stored_results = db.get_backtest_results(f"{strategy.__class__.__name__}_{symbol}")
         if stored_results and 'results' in stored_results:

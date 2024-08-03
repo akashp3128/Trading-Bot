@@ -4,15 +4,15 @@ from ..data_collection.exchange_data import get_historical_data
 from ..utils.database import Database
 
 class Backtester:
-    def __init__(self, strategy, start_date, end_date, initial_capital, symbol="BTC-USD"):
+    def __init__(self, strategy, start_date, end_date, initial_capital, symbol="SOL-USD", initial_position=0):
         self.strategy = strategy
         self.start_date = start_date
         self.end_date = end_date
         self.initial_capital = initial_capital
         self.current_capital = initial_capital
-        self.positions = {}
         self.symbol = symbol
-        self.asset = symbol.split('-')[0]  # Extracts 'BTC' from 'BTC-USD'
+        self.asset = symbol.split('-')[0]  # Extracts 'SOL' from 'SOL-USD'
+        self.positions = {self.asset: initial_position}
 
     def run(self):
         data = get_historical_data(self.symbol, self.start_date, self.end_date)
@@ -33,24 +33,26 @@ class Backtester:
                 signal = 0
 
             row = data.iloc[i]
-            if signal == 1 and self.current_capital > 0:  # Buy signal
-                buy_amount = self.current_capital
-                quantity = buy_amount / row['close']
-                self.positions[self.asset] = quantity
-                self.current_capital = 0
-            elif signal == -1 and self.asset in self.positions:  # Sell signal
-                sell_amount = self.positions[self.asset] * row['close']
-                self.current_capital = sell_amount
-                del self.positions[self.asset]
+            if signal == 1:  # Buy signal
+                buy_amount = min(self.current_capital, self.initial_capital * 0.1)  # Use 10% of initial capital or all available
+                if buy_amount > 0:
+                    quantity = buy_amount / row['close']
+                    self.positions[self.asset] = self.positions.get(self.asset, 0) + quantity
+                    self.current_capital -= buy_amount
+            elif signal == -1:  # Sell signal
+                sell_quantity = min(self.positions.get(self.asset, 0), self.positions.get(self.asset, 0) * 0.1)  # Sell 10% of current position
+                if sell_quantity > 0:
+                    sell_amount = sell_quantity * row['close']
+                    self.positions[self.asset] -= sell_quantity
+                    self.current_capital += sell_amount
 
-            portfolio_value = self.current_capital
-            if self.asset in self.positions:
-                portfolio_value += self.positions[self.asset] * row['close']
+            portfolio_value = self.current_capital + self.positions.get(self.asset, 0) * row['close']
 
             results.append({
                 'date': row.name,
                 'portfolio_value': portfolio_value,
-                f'{self.asset.lower()}_price': row['close']
+                f'{self.asset.lower()}_price': row['close'],
+                'position': self.positions.get(self.asset, 0)
             })
 
         results_df = pd.DataFrame(results)
@@ -73,31 +75,26 @@ class Backtester:
                 'max_drawdown': 0
             }
 
-        # Existing calculations
         total_return = (results['portfolio_value'].iloc[-1] - self.initial_capital) / self.initial_capital
         daily_returns = results['portfolio_value'].pct_change()
         sharpe_ratio = (daily_returns.mean() / daily_returns.std()) * np.sqrt(252)  # Annualized
         max_drawdown = (results['portfolio_value'] / results['portfolio_value'].cummax() - 1).min()
 
-        # New metrics
         annualized_return = (1 + total_return) ** (365 / len(results)) - 1
         volatility = daily_returns.std() * np.sqrt(252)
         sortino_ratio = (daily_returns.mean() / daily_returns[daily_returns < 0].std()) * np.sqrt(252)
         
-        # Calmar Ratio
         peak = results['portfolio_value'].cummax()
         drawdown = (results['portfolio_value'] - peak) / peak
-        calmar_ratio = annualized_return / abs(drawdown.min())
+        calmar_ratio = annualized_return / abs(drawdown.min()) if drawdown.min() != 0 else np.inf
 
-        # Win Rate
         trades = results['portfolio_value'].diff() != 0
         wins = (results['portfolio_value'].diff()[trades] > 0).sum()
-        win_rate = wins / trades.sum()
+        win_rate = wins / trades.sum() if trades.sum() > 0 else 0
 
-        # Profit Factor
         gains = results['portfolio_value'].diff()[results['portfolio_value'].diff() > 0].sum()
         losses = abs(results['portfolio_value'].diff()[results['portfolio_value'].diff() < 0].sum())
-        profit_factor = gains / losses if losses != 0 else float('inf')
+        profit_factor = gains / losses if losses != 0 else np.inf
 
         return {
             'total_return': total_return,
