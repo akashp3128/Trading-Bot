@@ -4,14 +4,14 @@ from ..data_collection.exchange_data import get_historical_data
 from ..utils.database import Database
 
 class Backtester:
-    def __init__(self, strategy, start_date, end_date, initial_capital, symbol="SOL-USD", initial_position=0):
+    def __init__(self, strategy, start_date, end_date, initial_capital, symbol="DOGE-USD", initial_position=0):
         self.strategy = strategy
         self.start_date = start_date
         self.end_date = end_date
         self.initial_capital = initial_capital
         self.current_capital = initial_capital
         self.symbol = symbol
-        self.asset = symbol.split('-')[0]  # Extracts 'SOL' from 'SOL-USD'
+        self.asset = symbol.split('-')[0]
         self.positions = {self.asset: initial_position}
 
     def run(self):
@@ -28,19 +28,19 @@ class Backtester:
         for i in range(len(data)):
             current_data = data.iloc[:i+1]
             if len(current_data) >= self.strategy.long_window:
-                signal = self.strategy.generate_signal(current_data)
+                signal, support, resistance = self.strategy.generate_signal(current_data)
             else:
-                signal = 0
+                signal, support, resistance = 0, np.nan, np.nan
 
             row = data.iloc[i]
             if signal == 1:  # Buy signal
-                buy_amount = min(self.current_capital, self.initial_capital * 0.1)  # Use 10% of initial capital or all available
+                buy_amount = min(self.current_capital, self.initial_capital * 0.8)
                 if buy_amount > 0:
                     quantity = buy_amount / row['close']
                     self.positions[self.asset] = self.positions.get(self.asset, 0) + quantity
                     self.current_capital -= buy_amount
             elif signal == -1:  # Sell signal
-                sell_quantity = min(self.positions.get(self.asset, 0), self.positions.get(self.asset, 0) * 0.1)  # Sell 10% of current position
+                sell_quantity = min(self.positions.get(self.asset, 0), self.positions.get(self.asset, 0) * 0.8)
                 if sell_quantity > 0:
                     sell_amount = sell_quantity * row['close']
                     self.positions[self.asset] -= sell_quantity
@@ -52,14 +52,15 @@ class Backtester:
                 'date': row.name,
                 'portfolio_value': portfolio_value,
                 f'{self.asset.lower()}_price': row['close'],
-                'position': self.positions.get(self.asset, 0)
+                'position': self.positions.get(self.asset, 0),
+                'support': support,
+                'resistance': resistance
             })
 
         results_df = pd.DataFrame(results)
         print(f"Results DataFrame shape: {results_df.shape}")
         print(f"Results DataFrame head:\n{results_df.head()}")
         
-        # Store backtest results in MongoDB
         db = Database()
         db.insert_backtest_results(f"{self.strategy.__class__.__name__}_{self.symbol}", results_df)
         db.close()
