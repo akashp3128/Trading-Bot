@@ -4,7 +4,7 @@ from ..data_collection.exchange_data import get_historical_data
 from ..utils.database import Database
 
 class Backtester:
-    def __init__(self, strategy, start_date, end_date, initial_capital, symbol="DOGE-USD", initial_position=0):
+    def __init__(self, strategy, start_date, end_date, initial_capital, symbol="BTC-USD", initial_position=0):
         self.strategy = strategy
         self.start_date = start_date
         self.end_date = end_date
@@ -13,6 +13,8 @@ class Backtester:
         self.symbol = symbol
         self.asset = symbol.split('-')[0]
         self.positions = {self.asset: initial_position}
+        self.stop_loss_pct = 0.05  # 5% stop loss
+        self.take_profit_pct = 0.1  # 10% take profit
 
     def run(self):
         data = get_historical_data(self.symbol, self.start_date, self.end_date)
@@ -24,27 +26,42 @@ class Backtester:
             return pd.DataFrame()
 
         results = []
+        entry_price = None
 
         for i in range(len(data)):
             current_data = data.iloc[:i+1]
             if len(current_data) >= self.strategy.long_window:
-                signal, support, resistance = self.strategy.generate_signal(current_data)
+                signal = self.strategy.generate_signal(current_data)
+                support, resistance = np.nan, np.nan  # SMACrossoverStrategy doesn't provide support/resistance
             else:
                 signal, support, resistance = 0, np.nan, np.nan
 
             row = data.iloc[i]
+            
+            # Check for stop loss or take profit
+            if entry_price is not None:
+                if signal != 1:  # We're in a position
+                    if row['close'] <= entry_price * (1 - self.stop_loss_pct):
+                        print("Stop Loss triggered")
+                        signal = -1
+                    elif row['close'] >= entry_price * (1 + self.take_profit_pct):
+                        print("Take Profit triggered")
+                        signal = -1
+
             if signal == 1:  # Buy signal
                 buy_amount = min(self.current_capital, self.initial_capital * 0.8)
                 if buy_amount > 0:
                     quantity = buy_amount / row['close']
                     self.positions[self.asset] = self.positions.get(self.asset, 0) + quantity
                     self.current_capital -= buy_amount
+                    entry_price = row['close']
             elif signal == -1:  # Sell signal
                 sell_quantity = min(self.positions.get(self.asset, 0), self.positions.get(self.asset, 0) * 0.8)
                 if sell_quantity > 0:
                     sell_amount = sell_quantity * row['close']
                     self.positions[self.asset] -= sell_quantity
                     self.current_capital += sell_amount
+                    entry_price = None
 
             portfolio_value = self.current_capital + self.positions.get(self.asset, 0) * row['close']
 
@@ -66,7 +83,7 @@ class Backtester:
         db.close()
         
         return results_df
-
+    
     def calculate_metrics(self, results):
         if results.empty:
             print("No results to calculate metrics. Returning empty metrics.")

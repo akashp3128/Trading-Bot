@@ -1,5 +1,4 @@
 from src.backtesting.backtester import Backtester
-from src.strategy.rsi_strategy import RSIStrategy
 from src.strategy.simple_moving_average import SMACrossoverStrategy
 from src.utils.database import Database
 import pandas as pd
@@ -13,10 +12,8 @@ def plot_results(results, asset):
     plt.figure(figsize=(12, 6))
     plt.plot(results['date'], results['portfolio_value'], label='Portfolio Value')
     plt.plot(results['date'], results[f'{asset.lower()}_price'] * (results['portfolio_value'].iloc[0] / results[f'{asset.lower()}_price'].iloc[0]), label=f'{asset.upper()} Price (Normalized)')
-    plt.plot(results['date'], results['support'] * (results['portfolio_value'].iloc[0] / results[f'{asset.lower()}_price'].iloc[0]), label='Support (Normalized)', linestyle='--')
-    plt.plot(results['date'], results['resistance'] * (results['portfolio_value'].iloc[0] / results[f'{asset.lower()}_price'].iloc[0]), label='Resistance (Normalized)', linestyle='--')
     plt.legend()
-    plt.title(f'Backtesting Results: Portfolio Value vs {asset.upper()} Price with Support/Resistance')
+    plt.title(f'Backtesting Results: Portfolio Value vs {asset.upper()} Price')
     plt.xlabel('Date')
     plt.ylabel('Value')
     plt.show()
@@ -38,22 +35,6 @@ def plot_results(results, asset):
     plt.ylabel('Frequency')
     plt.show()
 
-    plt.figure(figsize=(12, 6))
-    cumulative_returns = (1 + daily_returns).cumprod()
-    plt.plot(results['date'], cumulative_returns)
-    plt.title('Cumulative Returns')
-    plt.xlabel('Date')
-    plt.ylabel('Cumulative Return')
-    plt.show()
-
-    plt.figure(figsize=(12, 6))
-    rolling_sharpe = daily_returns.rolling(window=30).mean() / daily_returns.rolling(window=30).std() * np.sqrt(252)
-    plt.plot(results['date'][30:], rolling_sharpe[30:])
-    plt.title('30-Day Rolling Sharpe Ratio')
-    plt.xlabel('Date')
-    plt.ylabel('Sharpe Ratio')
-    plt.show()
-
 def print_performance_summary(metrics):
     table = PrettyTable()
     table.field_names = ["Metric", "Value"]
@@ -65,17 +46,16 @@ def create_trade_log(results, asset):
     trades = results[results['portfolio_value'].diff() != 0].copy()
     trades['trade_type'] = np.where(trades['portfolio_value'].diff() > 0, 'Buy', 'Sell')
     trades['trade_return'] = trades['portfolio_value'].pct_change()
-    return trades[['date', 'trade_type', f'{asset.lower()}_price', 'portfolio_value', 'trade_return', 'support', 'resistance']]
+    return trades[['date', 'trade_type', f'{asset.lower()}_price', 'portfolio_value', 'trade_return']]
 
 def main():
     try:
-        strategy = RSIStrategy(rsi_period=14, overbought=65, oversold=35, support_resistance_periods=14)
-        
+        strategy = SMACrossoverStrategy(short_window=5, long_window=10)
         
         end_date = datetime.now().strftime("%Y-%m-%d")
-        start_date = (datetime.now() - timedelta(days=35)).strftime("%Y-%m-%d")
+        start_date = (datetime.now() - timedelta(days=60)).strftime("%Y-%m-%d")
         
-        symbol = "ETH-USDT"
+        symbol = "SOL-USD"
         
         backtester = Backtester(strategy, start_date=start_date, end_date=end_date, initial_capital=1000, symbol=symbol, initial_position=0)
        
@@ -120,12 +100,12 @@ def main():
 
             # Plotting trade entry and exit points
             plt.figure(figsize=(12, 6))
-            plt.plot(results['date'], results[f'{asset.lower()}_price'], label=f'{asset.upper()} Price')
+            plt.plot(results['date'], results[f'{asset}_price'], label=f'{asset.upper()} Price')
             plt.scatter(trade_log[trade_log['trade_type'] == 'Buy']['date'], 
-                        trade_log[trade_log['trade_type'] == 'Buy'][f'{asset.lower()}_price'], 
+                        trade_log[trade_log['trade_type'] == 'Buy'][f'{asset}_price'], 
                         marker='^', color='g', label='Buy')
             plt.scatter(trade_log[trade_log['trade_type'] == 'Sell']['date'], 
-                        trade_log[trade_log['trade_type'] == 'Sell'][f'{asset.lower()}_price'], 
+                        trade_log[trade_log['trade_type'] == 'Sell'][f'{asset}_price'], 
                         marker='v', color='r', label='Sell')
             plt.title(f'{asset.upper()} Price with Trade Entry/Exit Points')
             plt.xlabel('Date')
